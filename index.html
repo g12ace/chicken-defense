@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chicken Defense</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #87CEEB;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            background: linear-gradient(180deg, #87CEEB 0%, #98D8C8 40%, #8FBC8F 70%, #6B8E23 100%);
+            box-shadow: 0 0 30px rgba(107, 142, 35, 0.5);
+            border: 5px solid #8B4513;
+        }
+
+        canvas {
+            display: block;
+            background: transparent;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #8B4513;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #FFE4B5;
+            z-index: 10;
+        }
+
+        #boostIndicator {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            color: #FFD700;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 0px #FF8C00;
+            display: none;
+            z-index: 10;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(139, 69, 19, 0.95);
+            padding: 40px 60px;
+            border-radius: 15px;
+            border: 3px solid #FFD700;
+            text-align: center;
+            display: none;
+            z-index: 100;
+        }
+
+        #gameOver h1 {
+            color: #FF4500;
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 0px #8B0000;
+        }
+
+        #gameOver p {
+            color: #FFE4B5;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+
+        #gameOver button {
+            background: #FFD700;
+            color: #8B4513;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+
+        #gameOver button:hover {
+            background: #FFA500;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #FFD700;
+        }
+
+        #startScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(139, 69, 19, 0.95);
+            padding: 40px 60px;
+            border-radius: 15px;
+            border: 3px solid #FFD700;
+            text-align: center;
+            z-index: 100;
+        }
+
+        #startScreen h1 {
+            color: #FFD700;
+            font-size: 56px;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 0px #8B4513;
+        }
+
+        #startScreen p {
+            color: #FFE4B5;
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        #startScreen button {
+            background: #FFD700;
+            color: #8B4513;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-family: 'Comic Sans MS', 'Arial', sans-serif;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: all 0.3s;
+        }
+
+        #startScreen button:hover {
+            background: #FFA500;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px #FFD700;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <div>SCORE: <span id="score">0</span></div>
+            <div>LIVES: <span id="lives">3</span> 🐔</div>
+        </div>
+
+        <div id="boostIndicator">
+            ⚡ RAPID FIRE! ⚡
+        </div>
+
+        <div id="startScreen">
+            <h1>CHICKEN DEFENSE</h1>
+            <p>🐔 Protect the farm! 🐔</p>
+            <p>← → Arrow keys to move</p>
+            <p>SPACE to peck (shoot)</p>
+            <p>Collect 🥚 for rapid fire boost!</p>
+            <p>Watch out for predators!</p>
+            <button onclick="startGame()">START GAME</button>
+        </div>
+
+        <div id="gameOver">
+            <h1>GAME OVER</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button onclick="restartGame()">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        let gameLoop;
+        let boosted = false;
+        let boostEndTime = 0;
+        let shootCooldown = 0;
+
+        // Player
+        const player = {
+            x: canvas.width / 2 - 20,
+            y: canvas.height - 80,
+            width: 40,
+            height: 40,
+            speed: 6,
+            dx: 0
+        };
+
+        // Arrays
+        let bullets = [];
+        let enemies = [];
+        let explosions = [];
+        let stars = [];
+        let eggs = [];
+        let clouds = [];
+
+        // Keys
+        const keys = {};
+
+        // Initialize clouds background
+        for (let i = 0; i < 8; i++) {
+            clouds.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * (canvas.height * 0.3),
+                size: 40 + Math.random() * 40,
+                speed: 0.3 + Math.random() * 0.5
+            });
+        }
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ' && gameRunning && shootCooldown <= 0) {
+                e.preventDefault();
+                shoot();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            gameRunning = true;
+            score = 0;
+            lives = 3;
+            bullets = [];
+            enemies = [];
+            explosions = [];
+            eggs = [];
+            boosted = false;
+            boostEndTime = 0;
+            shootCooldown = 0;
+            updateUI();
+            gameLoop = setInterval(update, 1000 / 60);
+            spawnEnemies();
+            spawnEggs();
+        }
+
+        function restartGame() {
+            document.getElementById('gameOver').style.display = 'none';
+            startGame();
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = lives;
+        }
+
+        function drawChicken() {
+            // Chicken body
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.ellipse(player.x + player.width / 2, player.y + 25, 18, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Chicken head
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2, player.y + 10, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Comb (red thing on top)
+            ctx.fillStyle = '#FF0000';
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2 - 3, player.y + 2);
+            ctx.lineTo(player.x + player.width / 2, player.y - 3);
+            ctx.lineTo(player.x + player.width / 2 + 3, player.y + 2);
+            ctx.fill();
+
+            // Beak
+            ctx.fillStyle = '#FFA500';
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y + 10);
+            ctx.lineTo(player.x + player.width / 2 + 8, player.y + 12);
+            ctx.lineTo(player.x + player.width / 2, player.y + 14);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#000000';
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2 - 4, player.y + 8, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Wing
+            ctx.fillStyle = '#F5F5DC';
+            ctx.beginPath();
+            ctx.ellipse(player.x + player.width / 2 - 8, player.y + 25, 8, 10, -0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Feet
+            ctx.strokeStyle = '#FFA500';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2 - 5, player.y + 40);
+            ctx.lineTo(player.x + player.width / 2 - 5, player.y + 45);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2 + 5, player.y + 40);
+            ctx.lineTo(player.x + player.width / 2 + 5, player.y + 45);
+            ctx.stroke();
+        }
+
+        function drawBullet(bullet) {
+            // Draw corn kernel
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.ellipse(bullet.x + 2, bullet.y + bullet.height / 2, 3, 6, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawEnemy(enemy) {
+            ctx.save();
+            ctx.translate(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+            
+            if (enemy.type === 'fox') {
+                // Fox body
+                ctx.fillStyle = '#FF6347';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 15, 12, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Fox head
+                ctx.beginPath();
+                ctx.arc(-8, -8, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Ears
+                ctx.beginPath();
+                ctx.moveTo(-12, -15);
+                ctx.lineTo(-10, -18);
+                ctx.lineTo(-8, -15);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(-4, -15);
+                ctx.lineTo(-6, -18);
+                ctx.lineTo(-8, -15);
+                ctx.fill();
+                
+                // Tail
+                ctx.fillStyle = '#FF4500';
+                ctx.beginPath();
+                ctx.ellipse(12, 5, 8, 5, 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+            } else if (enemy.type === 'hawk') {
+                // Hawk body
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Wings
+                ctx.fillStyle = '#654321';
+                ctx.beginPath();
+                ctx.ellipse(-15, 0, 12, 8, -0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.ellipse(15, 0, 12, 8, 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Head
+                ctx.fillStyle = '#8B4513';
+                ctx.beginPath();
+                ctx.arc(0, -10, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Beak
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.moveTo(0, -8);
+                ctx.lineTo(6, -6);
+                ctx.lineTo(0, -4);
+                ctx.fill();
+                
+            } else if (enemy.type === 'coyote') {
+                // Coyote body
+                ctx.fillStyle = '#D2B48C';
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 16, 13, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Head
+                ctx.beginPath();
+                ctx.ellipse(-10, -5, 10, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Ears
+                ctx.beginPath();
+                ctx.moveTo(-15, -12);
+                ctx.lineTo(-12, -16);
+                ctx.lineTo(-10, -12);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.moveTo(-5, -12);
+                ctx.lineTo(-7, -16);
+                ctx.lineTo(-9, -12);
+                ctx.fill();
+                
+                // Tail
+                ctx.fillStyle = '#BC9B6A';
+                ctx.beginPath();
+                ctx.ellipse(13, 3, 10, 6, 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
+        }
+
+        function drawExplosion(exp) {
+            // Draw feathers floating
+            for (let i = 0; i < 5; i++) {
+                ctx.fillStyle = `rgba(255, 255, 255, ${1 - exp.frame / 10})`;
+                ctx.save();
+                ctx.translate(exp.x + Math.cos(i) * exp.frame * 3, exp.y + Math.sin(i) * exp.frame * 3);
+                ctx.rotate(exp.frame * 0.5 + i);
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 4, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function drawClouds() {
+            clouds.forEach(cloud => {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, cloud.size * 0.6, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size * 0.5, cloud.y, cloud.size * 0.5, 0, Math.PI * 2);
+                ctx.arc(cloud.x + cloud.size, cloud.y, cloud.size * 0.6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawEgg(egg) {
+            // Egg shape
+            ctx.fillStyle = '#FFF8DC';
+            ctx.strokeStyle = '#D2691E';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(egg.x + egg.width / 2, egg.y + egg.height / 2, 12, 16, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Sparkle effect
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(egg.x + egg.width / 2 - 4, egg.y + 8, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function shoot() {
+            bullets.push({
+                x: player.x + player.width / 2 - 2,
+                y: player.y,
+                width: 4,
+                height: 15,
+                speed: 8
+            });
+            
+            // Set cooldown based on boost
+            if (boosted) {
+                shootCooldown = 5; // Fast shooting when boosted
+            } else {
+                shootCooldown = 15; // Normal cooldown
+            }
+        }
+
+        function spawnEnemies() {
+            if (!gameRunning) return;
+            
+            const types = ['fox', 'hawk', 'coyote'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            enemies.push({
+                x: Math.random() * (canvas.width - 40),
+                y: -40,
+                width: 40,
+                height: 40,
+                speed: 1.5 + Math.random() * 1.5,
+                type: type
+            });
+
+            setTimeout(spawnEnemies, 1500 + Math.random() * 2000);
+        }
+
+        function spawnEggs() {
+            if (!gameRunning) return;
+            
+            eggs.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                width: 30,
+                height: 30,
+                speed: 2
+            });
+
+            setTimeout(spawnEggs, 8000 + Math.random() * 7000);
+        }
+
+        function createExplosion(x, y) {
+            explosions.push({
+                x: x,
+                y: y,
+                size: 20,
+                frame: 0
+            });
+        }
+
+        function update() {
+            if (!gameRunning) return;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update and draw clouds
+            clouds.forEach(cloud => {
+                cloud.x += cloud.speed;
+                if (cloud.x > canvas.width + cloud.size * 2) {
+                    cloud.x = -cloud.size * 2;
+                    cloud.y = Math.random() * (canvas.height * 0.3);
+                }
+            });
+            drawClouds();
+
+            // Update shoot cooldown
+            if (shootCooldown > 0) {
+                shootCooldown--;
+            }
+
+            // Check boost timer
+            if (boosted && Date.now() > boostEndTime) {
+                boosted = false;
+                document.getElementById('boostIndicator').style.display = 'none';
+            }
+
+            // Player movement
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Update bullets
+            bullets = bullets.filter(bullet => {
+                bullet.y -= bullet.speed;
+                return bullet.y > -bullet.height;
+            });
+
+            // Update eggs
+            eggs = eggs.filter(egg => {
+                egg.y += egg.speed;
+                
+                // Check if player collected egg
+                if (egg.x < player.x + player.width &&
+                    egg.x + egg.width > player.x &&
+                    egg.y < player.y + player.height &&
+                    egg.y + egg.height > player.y) {
+                    
+                    // Activate boost
+                    boosted = true;
+                    boostEndTime = Date.now() + 10000; // 10 seconds
+                    document.getElementById('boostIndicator').style.display = 'block';
+                    score += 5;
+                    updateUI();
+                    return false;
+                }
+                
+                return egg.y < canvas.height;
+            });
+
+            // Update enemies
+            enemies = enemies.filter(enemy => {
+                enemy.y += enemy.speed;
+                
+                // Check if enemy hit player
+                if (enemy.x < player.x + player.width &&
+                    enemy.x + enemy.width > player.x &&
+                    enemy.y < player.y + player.height &&
+                    enemy.y + enemy.height > player.y) {
+                    lives--;
+                    updateUI();
+                    createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                    
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                    return false;
+                }
+                
+                return enemy.y < canvas.height;
+            });
+
+            // Check bullet-enemy collisions
+            bullets.forEach((bullet, bIndex) => {
+                enemies.forEach((enemy, eIndex) => {
+                    if (bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y) {
+                        
+                        bullets.splice(bIndex, 1);
+                        enemies.splice(eIndex, 1);
+                        score += 10;
+                        updateUI();
+                        createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+                    }
+                });
+            });
+
+            // Update explosions
+            explosions = explosions.filter(exp => {
+                exp.frame++;
+                return exp.frame < 10;
+            });
+
+            // Draw everything
+            eggs.forEach(drawEgg);
+            bullets.forEach(drawBullet);
+            enemies.forEach(drawEnemy);
+            explosions.forEach(drawExplosion);
+            drawChicken();
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(gameLoop);
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
