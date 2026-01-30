@@ -155,6 +155,7 @@
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         
         <div id="ui">
+            <div>LEVEL: <span id="level">1</span></div>
             <div>SCORE: <span id="score">0</span></div>
             <div>LIVES: <span id="lives">3</span> 🐔</div>
         </div>
@@ -166,8 +167,8 @@
         <div id="startScreen">
             <h1>CHICKEN DEFENSE</h1>
             <p>🐔 Protect the farm! 🐔</p>
-            <p>← → Arrow keys to move</p>
-            <p>SPACE to peck (shoot)</p>
+            <p>Move: Mouse/Touch OR ← → Arrow keys</p>
+            <p>Shoot: Click/Tap OR SPACE</p>
             <p>Collect 🥚 for rapid fire boost!</p>
             <p>Watch out for predators!</p>
             <button onclick="startGame()">START GAME</button>
@@ -192,6 +193,8 @@
         let boosted = false;
         let boostEndTime = 0;
         let shootCooldown = 0;
+        let level = 1;
+        let enemiesDefeated = 0;
 
         // Player
         const player = {
@@ -237,11 +240,45 @@
             keys[e.key] = false;
         });
 
+        // Mouse/touch controls
+        let mouseX = canvas.width / 2;
+
+        // Mouse movement
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+        });
+
+        // Touch movement
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            mouseX = touch.clientX - rect.left;
+        });
+
+        // Auto-shoot on touch
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameRunning && shootCooldown <= 0) {
+                shoot();
+            }
+        });
+
+        // Click to shoot
+        canvas.addEventListener('click', (e) => {
+            if (gameRunning && shootCooldown <= 0) {
+                shoot();
+            }
+        });
+
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
             gameRunning = true;
             score = 0;
             lives = 3;
+            level = 1;
+            enemiesDefeated = 0;
             bullets = [];
             enemies = [];
             explosions = [];
@@ -263,6 +300,55 @@
         function updateUI() {
             document.getElementById('score').textContent = score;
             document.getElementById('lives').textContent = lives;
+            document.getElementById('level').textContent = level;
+        }
+
+        function getLevelSettings() {
+            // Returns spawn delay and enemy speed based on level
+            switch(level) {
+                case 1:
+                    return { spawnDelay: 2000, enemySpeed: 1.5, enemiesNeeded: 10 };
+                case 2:
+                    return { spawnDelay: 1700, enemySpeed: 2.0, enemiesNeeded: 15 };
+                case 3:
+                    return { spawnDelay: 1400, enemySpeed: 2.5, enemiesNeeded: 20 };
+                case 4:
+                    return { spawnDelay: 1100, enemySpeed: 3.0, enemiesNeeded: 25 };
+                case 5:
+                    return { spawnDelay: 900, enemySpeed: 3.5, enemiesNeeded: 999 }; // Endless
+                default:
+                    return { spawnDelay: 2000, enemySpeed: 1.5, enemiesNeeded: 10 };
+            }
+        }
+
+        function checkLevelUp() {
+            const settings = getLevelSettings();
+            if (enemiesDefeated >= settings.enemiesNeeded && level < 5) {
+                level++;
+                enemiesDefeated = 0;
+                updateUI();
+                showLevelUpMessage();
+            }
+        }
+
+        function showLevelUpMessage() {
+            // Create temporary level up message
+            const msg = document.createElement('div');
+            msg.style.position = 'absolute';
+            msg.style.top = '50%';
+            msg.style.left = '50%';
+            msg.style.transform = 'translate(-50%, -50%)';
+            msg.style.fontSize = '48px';
+            msg.style.fontWeight = 'bold';
+            msg.style.color = '#FFD700';
+            msg.style.textShadow = '3px 3px 0px #8B4513';
+            msg.style.zIndex = '1000';
+            msg.textContent = `LEVEL ${level}!`;
+            document.getElementById('gameContainer').appendChild(msg);
+            
+            setTimeout(() => {
+                msg.remove();
+            }, 2000);
         }
 
         function drawChicken() {
@@ -298,6 +384,9 @@
             ctx.fillStyle = '#000000';
             ctx.beginPath();
             ctx.arc(player.x + player.width / 2 - 4, player.y + 8, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(player.x + player.width / 2 + 2, player.y + 8, 2, 0, Math.PI * 2);
             ctx.fill();
 
             // Wing
@@ -343,22 +432,60 @@
                 ctx.arc(-8, -8, 10, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Ears
+                // Fox ears - pointy triangular ears
+                ctx.fillStyle = '#FF6347';
                 ctx.beginPath();
-                ctx.moveTo(-12, -15);
-                ctx.lineTo(-10, -18);
-                ctx.lineTo(-8, -15);
+                ctx.moveTo(-14, -12);
+                ctx.lineTo(-12, -20);
+                ctx.lineTo(-10, -12);
+                ctx.closePath();
                 ctx.fill();
+                
                 ctx.beginPath();
-                ctx.moveTo(-4, -15);
-                ctx.lineTo(-6, -18);
-                ctx.lineTo(-8, -15);
+                ctx.moveTo(-6, -12);
+                ctx.lineTo(-4, -20);
+                ctx.lineTo(-2, -12);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Inner ears (lighter)
+                ctx.fillStyle = '#FFB6B6';
+                ctx.beginPath();
+                ctx.moveTo(-13, -12);
+                ctx.lineTo(-12, -17);
+                ctx.lineTo(-11, -12);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.beginPath();
+                ctx.moveTo(-5, -12);
+                ctx.lineTo(-4, -17);
+                ctx.lineTo(-3, -12);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Snout
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.ellipse(-8, -4, 5, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Nose
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(-8, -6, 2, 0, Math.PI * 2);
                 ctx.fill();
                 
                 // Tail
                 ctx.fillStyle = '#FF4500';
                 ctx.beginPath();
                 ctx.ellipse(12, 5, 8, 5, 0.5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Tail tip (white)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.ellipse(16, 7, 4, 3, 0.5, 0, Math.PI * 2);
                 ctx.fill();
                 
             } else if (enemy.type === 'hawk') {
@@ -450,6 +577,58 @@
             });
         }
 
+        function drawChickenCoop() {
+            // Draw chicken coop in background (bottom right)
+            const coopX = canvas.width - 150;
+            const coopY = canvas.height - 150;
+            
+            // Main coop body (barn red)
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(coopX, coopY, 120, 100);
+            
+            // Roof (dark brown)
+            ctx.fillStyle = '#654321';
+            ctx.beginPath();
+            ctx.moveTo(coopX - 10, coopY);
+            ctx.lineTo(coopX + 60, coopY - 40);
+            ctx.lineTo(coopX + 130, coopY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Door (darker)
+            ctx.fillStyle = '#5C0000';
+            ctx.fillRect(coopX + 45, coopY + 40, 30, 60);
+            
+            // Door trim
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(coopX + 45, coopY + 40, 30, 60);
+            
+            // Window
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(coopX + 15, coopY + 20, 25, 25);
+            
+            // Window panes
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(coopX + 27.5, coopY + 20);
+            ctx.lineTo(coopX + 27.5, coopY + 45);
+            ctx.moveTo(coopX + 15, coopY + 32.5);
+            ctx.lineTo(coopX + 40, coopY + 32.5);
+            ctx.stroke();
+            
+            // Fence
+            ctx.fillStyle = '#8B4513';
+            for (let i = 0; i < 5; i++) {
+                ctx.fillRect(coopX - 30 + i * 15, coopY + 80, 4, 20);
+            }
+            
+            // Fence horizontal bars
+            ctx.fillRect(coopX - 30, coopY + 85, 64, 3);
+            ctx.fillRect(coopX - 30, coopY + 93, 64, 3);
+        }
+
         function drawEgg(egg) {
             // Egg shape
             ctx.fillStyle = '#FFF8DC';
@@ -487,6 +666,7 @@
         function spawnEnemies() {
             if (!gameRunning) return;
             
+            const settings = getLevelSettings();
             const types = ['fox', 'hawk', 'coyote'];
             const type = types[Math.floor(Math.random() * types.length)];
             
@@ -495,11 +675,11 @@
                 y: -40,
                 width: 40,
                 height: 40,
-                speed: 1.5 + Math.random() * 1.5,
+                speed: settings.enemySpeed + Math.random() * 0.5,
                 type: type
             });
 
-            setTimeout(spawnEnemies, 1500 + Math.random() * 2000);
+            setTimeout(spawnEnemies, settings.spawnDelay + Math.random() * 1000);
         }
 
         function spawnEggs() {
@@ -540,6 +720,7 @@
                 }
             });
             drawClouds();
+            drawChickenCoop();
 
             // Update shoot cooldown
             if (shootCooldown > 0) {
@@ -552,12 +733,26 @@
                 document.getElementById('boostIndicator').style.display = 'none';
             }
 
-            // Player movement
+            // Player movement - keyboard OR mouse
             if (keys['ArrowLeft'] && player.x > 0) {
                 player.x -= player.speed;
             }
             if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
                 player.x += player.speed;
+            }
+            
+            // Mouse/touch movement - smooth follow
+            const targetX = mouseX - player.width / 2;
+            const dx = targetX - player.x;
+            
+            // Only move if mouse is being used (not keyboard)
+            if (!keys['ArrowLeft'] && !keys['ArrowRight'] && Math.abs(dx) > 2) {
+                // Smooth movement towards mouse
+                player.x += dx * 0.15;
+                
+                // Keep player in bounds
+                if (player.x < 0) player.x = 0;
+                if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
             }
 
             // Update bullets
@@ -621,7 +816,9 @@
                         bullets.splice(bIndex, 1);
                         enemies.splice(eIndex, 1);
                         score += 10;
+                        enemiesDefeated++;
                         updateUI();
+                        checkLevelUp();
                         createExplosion(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
                     }
                 });
